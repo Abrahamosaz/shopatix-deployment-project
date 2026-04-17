@@ -87,13 +87,18 @@ resource "aws_security_group" "vpc_worker_node_sg" {
 }
 
 
+resource "aws_key_pair" "node_key" {
+  key_name   = "${var.resource_tags["Project"]}-key"
+  public_key = file("${path.root}/id_rsa.pub")
+}
+
 
 resource "aws_instance" "manager_node" {
   count                       = var.manager_node_count
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
-  key_name                    = data.aws_key_pair.k8s_cluster_nodes.key_name
-  subnet_id                   = var.subnet_ids[count.index % length(var.subnet_ids)].id
+  key_name                    = aws_key_pair.node_key.key_name
+  subnet_id                   = var.subnet_ids[count.index % length(var.subnet_ids)]
   vpc_security_group_ids      = [aws_security_group.vpc_manager_node_sg.id]
   associate_public_ip_address = true
 
@@ -110,8 +115,8 @@ resource "aws_instance" "worker_node" {
   count                       = var.worker_node_count
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
-  key_name                    = data.aws_key_pair.k8s_cluster_nodes.key_name
-  subnet_id                   = var.subnet_ids[count.index % length(var.subnet_ids)].id
+  key_name                    = aws_key_pair.node_key.key_name
+  subnet_id                   = var.subnet_ids[count.index % length(var.subnet_ids)]
   vpc_security_group_ids      = [aws_security_group.vpc_worker_node_sg.id]
   associate_public_ip_address = true
 

@@ -1,0 +1,13 @@
+---
+- name: Check if node is already part of a Swarm
+  shell: docker info --format '{% raw %}{{.Swarm.LocalNodeState}}{% endraw %}'
+  register: swarm_status
+  changed_when: false
+
+- name: Debug Swarm Status
+  debug:
+    var: swarm_status.stdout
+
+- name: Join Docker Swarm as worker
+  shell: "docker swarm join --token {{ swarm_worker_token }} {{ hostvars[groups['managers'][0]]['internal_ip'] }}:2377"
+  when: swarm_status.stdout == "inactive" or swarm_status.stdout == ""

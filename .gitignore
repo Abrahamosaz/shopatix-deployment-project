@@ -3,3 +3,5 @@ terraform/**/terraform.tfstate
 terraform/**/terraform.tfstate.*
 terraform/**/terraform.tfvars
 terraform/**/backend.hcl
+terraform/**/id_rsa
+terraform/**/id_rsa.pub

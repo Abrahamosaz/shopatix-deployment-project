@@ -1,0 +1,37 @@
+---
+- name: Ensure the mount directory exists
+  file:
+    path: /data/database
+    state: directory
+    mode: '0755'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
+- name: Get list of NVMe devices
+  shell: lsblk -dpn -o NAME,SIZE | grep nvme
+  register: nvme_devices
+  changed_when: false
+  ignore_errors: yes
+
+- name: Format the EBS volume if it has no filesystem
+  filesystem:
+    fstype: ext4
+    dev: /dev/nvme1n1
+  # We assume nvme1n1 is the attached EBS volume on Nitro instances like t3.small
+  # nvme0n1 is usually the root volume.
+  ignore_errors: yes
+
+- name: Mount the EBS volume
+  mount:
+    path: /data/database
+    src: /dev/nvme1n1
+    fstype: ext4
+    state: mounted
+
+- name: Set permissions for the mount point
+  file:
+    path: /data/database
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0777'

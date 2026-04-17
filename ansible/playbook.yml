@@ -1,0 +1,24 @@
+---
+- name: Configure Docker and Swarm
+  hosts: all
+  become: yes
+  roles:
+    - common
+
+- name: Initialize Swarm Manager
+  hosts: managers
+  become: yes
+  roles:
+    - swarm-manager
+
+- name: Join Swarm Workers
+  hosts: workers
+  become: yes
+  roles:
+    - swarm-worker
+
+- name: Setup Database Storage
+  hosts: db_nodes
+  become: yes
+  roles:
+    - ebs-mount

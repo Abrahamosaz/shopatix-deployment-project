@@ -44,3 +44,13 @@ module "compute" {
   subnet_ids = module.networking.public_subnet_ids
 }
 
+
+module "storage" {
+  source = "../../modules/storage"
+
+  availability_zone  = module.compute.worker_azs[0]
+  worker_instance_id = module.compute.worker_instance_ids[0]
+  volume_size        = 20
+  resource_tags      = var.resource_tags
+}
+
