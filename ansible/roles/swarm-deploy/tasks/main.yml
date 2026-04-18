@@ -1,0 +1,39 @@
+---
+- name: Create deployment directory on manager
+  file:
+    path: /root/shopatix-deployment
+    state: directory
+    mode: '0700'
+
+- name: Sync deployment files to manager
+  synchronize:
+    src: ../deployment/
+    dest: /root/shopatix-deployment/
+    recursive: yes
+    delete: yes
+    rsync_opts:
+      - "--exclude=db_secrets.yml"
+  delegate_to: localhost
+
+- name: Build and Deploy the Swarm Stack
+  shell: |
+    export DOCKER_BUILDKIT=1
+    export REPO_TAG={{ app_version }}
+    cd /root/shopatix-deployment
+    
+    # 1. Build the latest images
+    docker compose build
+    
+    # 2. Cleanup build secrets from disk
+    rm -f github_token.txt
+    
+    # 3. Deploy to Swarm
+    docker stack deploy -c docker-compose.yaml shopatix --with-registry-auth
+
+    # 4. POST-DEPLOY CLEANUP: Remove environment files from disk
+    rm -rf envs/
+  register: deploy_result
+
+- name: Show Deployment Output
+  debug:
+    var: deploy_result.stdout_lines

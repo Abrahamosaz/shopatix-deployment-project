@@ -8,6 +8,8 @@
 - name: Initialize Swarm Manager
   hosts: managers
   become: yes
+  vars_files:
+    - ../deployment/db_secrets.yml
   roles:
     - swarm-manager
 
@@ -22,3 +24,13 @@
   become: yes
   roles:
     - ebs-mount
+
+- name: Deploy Application Stack
+  hosts: managers
+  become: yes
+  vars:
+    app_version: "v1.0.0"
+  vars_files:
+    - ../deployment/db_secrets.yml
+  roles:
+    - swarm-deploy

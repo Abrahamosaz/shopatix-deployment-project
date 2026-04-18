@@ -26,3 +26,15 @@
   delegate_to: "{{ item }}"
   delegate_facts: true
   with_items: "{{ groups['workers'] }}"
+
+- name: Create Docker Secrets for databases
+  shell: |
+    if ! docker secret inspect {{ item.name }} >/dev/null 2>&1; then
+      echo "{{ item.pass }}" | docker secret create {{ item.name }} -
+    fi
+  loop:
+    - { name: 'payment_db_pass', pass: "{{ payment_db_pass }}" }
+    - { name: 'core_db_pass', pass: "{{ core_db_pass }}" }
+    - { name: 'commerce_db_pass', pass: "{{ commerce_db_pass }}" }
+    - { name: 'automation_db_pass', pass: "{{ automation_db_pass }}" }
+  when: inventory_hostname == groups['managers'][0]

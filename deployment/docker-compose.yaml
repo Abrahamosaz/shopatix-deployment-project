@@ -1,0 +1,354 @@
+services:
+  # =========================
+  # DATABASES (Pinned to EBS Node & Network Layer Security)
+  # =========================
+  payment-postgres:
+    image: postgres:18
+    networks:
+      - shopatix_secure
+    secrets:
+      - payment_db_pass
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/payment_db_pass
+      POSTGRES_DB: payment_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - type: bind
+        source: /data/database/payment_data
+        target: /var/lib/postgresql/data
+    deploy:
+      placement:
+        constraints:
+          - node.labels.type == database
+
+  core-postgres:
+    image: postgres:18
+    networks:
+      - shopatix_secure
+    secrets:
+      - core_db_pass
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/core_db_pass
+      POSTGRES_DB: core_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - type: bind
+        source: /data/database/core_data
+        target: /var/lib/postgresql/data
+    deploy:
+      placement:
+        constraints:
+          - node.labels.type == database
+
+  commerce-postgres:
+    image: postgres:18
+    networks:
+      - shopatix_secure
+    secrets:
+      - commerce_db_pass
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/commerce_db_pass
+      POSTGRES_DB: commerce_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - type: bind
+        source: /data/database/commerce_data
+        target: /var/lib/postgresql/data
+    deploy:
+      placement:
+        constraints:
+          - node.labels.type == database
+
+  automation-postgres:
+    image: postgres:18
+    networks:
+      - shopatix_secure
+    secrets:
+      - automation_db_pass
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/automation_db_pass
+      POSTGRES_DB: automation_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - type: bind
+        source: /data/database/automation_data
+        target: /var/lib/postgresql/data
+    deploy:
+      placement:
+        constraints:
+          - node.labels.type == database
+
+  mongodb:
+    image: mongo
+    networks:
+      - shopatix_secure
+    volumes:
+      - type: bind
+        source: /data/database/mongo_data
+        target: /data/db
+    deploy:
+      placement:
+        constraints:
+          - node.labels.type == database
+  
+  redis:
+    image: redis:7.2-alpine
+    networks:
+      - shopatix_secure
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - type: bind
+        source: /data/database/redis_data
+        target: /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      placement:
+        constraints:
+          - node.labels.type == database
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    networks:
+      - shopatix_secure
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      CLUSTER_ID: "Mk3OEYBSD34fcwNTJENDLw"
+    volumes:
+      - type: bind
+        source: /data/database/kafka_data
+        target: /var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    deploy:
+      placement:
+        constraints:
+          - node.labels.type == database
+
+  # =========================
+  # GUI TOOLS (Can run anywhere)
+  # =========================
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    networks:
+      - shopatix_secure
+    ports:
+      - "8002:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    networks:
+      - shopatix_secure
+    ports:
+      - "8081:8081"
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+
+  # =========================
+  # MICROSERVICES
+  # =========================
+  payment-service:
+    build:
+      context: .
+      args:
+        APP_NAME: payment-service
+        REPO_TAG: ${REPO_TAG}
+      secrets:
+        - github_token
+    networks:
+      - shopatix_secure
+    env_file:
+      - ./envs/payment.env
+    depends_on:
+      - payment-postgres
+    ports:
+      - "3008:3008"
+
+  auth-service:
+    build:
+      context: .
+      args:
+        APP_NAME: auth-service
+        REPO_TAG: ${REPO_TAG}
+      secrets:
+        - github_token
+    networks:
+      - shopatix_secure
+    env_file:
+      - ./envs/auth.env
+    depends_on:
+      - core-postgres
+    ports:
+      - "3003:3003"
+
+  admin-service:
+    build:
+      context: .
+      args:
+        APP_NAME: admin-service
+        REPO_TAG: ${REPO_TAG}
+      secrets:
+        - github_token
+    networks:
+      - shopatix_secure
+    env_file:
+      - ./envs/admin.env
+    depends_on:
+      - core-postgres
+    ports:
+      - "3001:3001"
+
+  analytics-service:
+    build:
+      context: .
+      args:
+        APP_NAME: analytic-service
+        REPO_TAG: ${REPO_TAG}
+      secrets:
+        - github_token
+    networks:
+      - shopatix_secure
+    env_file:
+      - ./envs/analytic.env
+    depends_on:
+      - core-postgres
+    ports:
+      - "3010:3010"
+
+  order-service:
+    build:
+      context: .
+      args:
+        APP_NAME: order-service
+        REPO_TAG: ${REPO_TAG}
+      secrets:
+        - github_token
+    networks:
+      - shopatix_secure
+    env_file:
+      - ./envs/order.env
+    depends_on:
+      - commerce-postgres
+    ports:
+      - "3007:3007"
+
+  inventory-service:
+    build:
+      context: .
+      args:
+        APP_NAME: inventory-service
+        REPO_TAG: ${REPO_TAG}
+      secrets:
+        - github_token
+    networks:
+      - shopatix_secure
+    env_file: 
+      - ./envs/inventory.env
+    depends_on:
+      - commerce-postgres
+    ports:
+      - "3005:3005"
+
+  automation-engine:
+    build:
+      context: .
+      args:
+        APP_NAME: automation-engine-service
+        REPO_TAG: ${REPO_TAG}
+      secrets:
+        - github_token
+    networks:
+      - shopatix_secure
+    env_file:
+      - ./envs/automation.env
+    depends_on:
+      - automation-postgres
+    ports:
+      - "3004:3004"
+
+  storefront-service:
+    build:
+      context: .
+      args:
+        APP_NAME: storefront-service
+        REPO_TAG: ${REPO_TAG}
+      secrets:
+        - github_token
+    networks:
+      - shopatix_secure
+    env_file:
+      - ./envs/storefront.env
+    depends_on:
+      - mongodb
+    ports:
+      - "3009:3009"
+
+  api-gateway:
+    build:
+      context: .
+      args:
+        APP_NAME: api-gateway
+        REPO_TAG: v1.0.0
+      secrets:
+        - github_token
+    networks:
+      - shopatix_secure
+    env_file:
+      - ./envs/api-gateway.env
+    depends_on:
+      - auth-service
+      - order-service
+      - inventory-service
+      - payment-service
+    ports:
+      - "3002:3002"
+
+networks:
+  shopatix_secure:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+
+secrets:
+  github_token:
+    file: ./github_token.txt
+  payment_db_pass:
+    external: true
+  core_db_pass:
+    external: true
+  commerce_db_pass:
+    external: true
+  automation_db_pass:
+    external: true

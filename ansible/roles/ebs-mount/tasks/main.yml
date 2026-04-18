@@ -35,3 +35,19 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: '0777'
+
+- name: Create subdirectories for database services
+  file:
+    path: "/data/database/{{ item }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0777'
+  loop:
+    - payment_data
+    - core_data
+    - commerce_data
+    - automation_data
+    - mongo_data
+    - redis_data
+    - kafka_data

@@ -5,3 +5,8 @@ terraform/**/terraform.tfvars
 terraform/**/backend.hcl
 terraform/**/id_rsa
 terraform/**/id_rsa.pub
+
+# Production Secrets
+deployment/db_secrets.yml
+deployment/github_token.txt
+deployment/envs/*.env
